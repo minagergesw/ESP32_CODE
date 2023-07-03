@@ -85,7 +85,7 @@ String listenerPath = "board1/outputs/digital/";
 
 String tempPath = "/temperature";
 String humPath = "/humidity";
-String presPath = "/pressure";
+String fahPath = "/fahrenheit";
 String gasPath = "/gas";
 String timePath = "/timestamp";
 String readings ="/readings";
@@ -101,7 +101,7 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 // Timer variables (send new readings every three minutes)
 unsigned long sendDataPrevMillis = 0;
-unsigned long timerDelay = 180000;
+unsigned long timerDelay = 10000;
 
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -401,6 +401,7 @@ pirState = LOW;
 
     json.set(tempPath.c_str(), String(t));
     json.set(humPath.c_str(), String(h));
+    json.set(fahPath.c_str(), String(f));
     json.set(gasPath.c_str(), String(sensor_Aout));
     // json.set(humPath.c_str(), String(hif));
     // json.set(presPath.c_str(), String(bme.readPressure()/100.0F));
