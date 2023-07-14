@@ -51,30 +51,35 @@ bool initialConfig = false;
 // Temperature Sensor
 #define DHTPIN 23               // Digital pin connected to the DHT sensor
 #define TEMP_UPPER_THRESHOLD 30 // upper temperature threshold
-#define TEMP_LOWER_THRESHOLD 15 // lower temperature threshold
-#define RELAY_FAN_PIN 19
+#define TEMP_LOWER_THRESHOLD 25 // lower temperature threshold
+#define RELAY_FAN_PIN 26
 // const int output4 = 26;
 // const int output1 = 27;
 
 // Gas Sensor
 const int Sensor = 35;
-const int LED = 13;
+const int LED = 14;
 
 const int out12 = 12;
 const int out14 = 14;
-const int out19 = 19;
+// const int out19 = 19;
 const int out18 = 18;
 const int out5 = 5;
 const int out17 = 17;
 const int out16 = 16;
 const int out4 = 4;
 const int out0 = 0;
-const int out2 = 2;
-const int out15 = 15;
+const int out2 = 2;   
+const int out15 = 15; // Indoor light
+const int out25 = 25;
+int checktemp = 0;
+int checklight = 0;
+int checkgas = 0;
+// const int out26 = 26;
 
 // PIR SENSOR
-int ledPin = 5;     // choose the pin for the LED
-int inputPin = 27;  // choose the input pin (for PIR sensor)
+int ledPin = 19;    // choose the pin for the LED
+int inputPin = 13;  // choose the input pin (for PIR sensor)
 int pirState = LOW; // we start, assuming no motion detected
 int val = 0;        // variable for reading the pin status
 
@@ -174,12 +179,37 @@ void streamCallback(FirebaseStream data)
   if (data.dataTypeEnum() == fb_esp_rtdb_data_type_integer)
   {
     String gpio = streamPath.substring(1);
+
     int state = data.intData();
     Serial.print("GPIO: ");
     Serial.println(gpio);
     Serial.print("STATE: ");
     Serial.println(state);
     digitalWrite(gpio.toInt(), state);
+    if (gpio.toInt() == 50 && state == 1)
+    {
+      checktemp = 1;
+    }
+    else if (gpio.toInt() == 50 && state == 0)
+    {
+      checktemp = 0;
+    }
+    if (gpio.toInt() == 51 && state == 1)
+    {
+      checklight = 1;
+    }
+    else if (gpio.toInt() == 51 && state == 0)
+    {
+      checklight = 0;
+    }
+    if (gpio.toInt() == 52 && state == 1)
+    {
+      checkgas = 1;
+    }
+    else if (gpio.toInt() == 52 && state == 0)
+    {
+      checkgas = 0;
+    }
   }
 
   /* When it first runs, it is triggered on the root (/) path and returns a JSON with all keys
@@ -202,6 +232,31 @@ void streamCallback(FirebaseStream data)
       Serial.println(gpio);
       digitalWrite(gpio, state);
       Serial.printf("Name: %s, Value: %s, Type: %s\n", value.key.c_str(), value.value.c_str(), value.type == FirebaseJson::JSON_OBJECT ? "object" : "array");
+
+      if (gpio == 50 && state == 1)
+      {
+        checktemp = 1;
+      }
+      else if (gpio == 50 && state == 0)
+      {
+        checktemp = 0;
+      }
+      if (gpio == 51 && state == 1)
+      {
+        checklight = 1;
+      }
+      else if (gpio == 51 && state == 0)
+      {
+        checklight = 0;
+      }
+      if (gpio == 52 && state == 1)
+      {
+        checkgas = 1;
+      }
+      else if (gpio == 52 && state == 0)
+      {
+        checkgas = 0;
+      }
     }
     Serial.println();
     json.iteratorEnd(); // required for free the used memory in iteration (node data collection)
@@ -234,7 +289,7 @@ unsigned long getTime()
 void setup()
 {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
- WiFi.mode(WIFI_STA);
+  WiFi.mode(WIFI_STA);
   Serial.begin(115200);
   initWiFi();
   unsigned long startedAt = millis();
@@ -305,14 +360,17 @@ void setup()
   pinMode(inputPin, INPUT); // declare sensor as input
   pinMode(out12, OUTPUT);
   pinMode(out14, OUTPUT);
-  pinMode(out17, OUTPUT);
-  pinMode(out19, OUTPUT);
+  // pinMode(out17, OUTPUT);
+  // pinMode(out19, OUTPUT);
   pinMode(out15, OUTPUT);
   pinMode(out18, OUTPUT);
   pinMode(out5, OUTPUT);
   pinMode(out4, OUTPUT);
   pinMode(out2, OUTPUT);
-  pinMode(out16, OUTPUT);
+  pinMode(out25, OUTPUT);
+  pinMode(RELAY_FAN_PIN, OUTPUT);
+  // pinMode(out26, OUTPUT);
+  // pinMode(out16, OUTPUT);
 
   pinMode(out0, OUTPUT);
 }
@@ -326,15 +384,22 @@ void loop()
   Serial.print("Gas Sensor: ");
   Serial.print(sensor_Aout); /*Read value printed*/
   Serial.print("\t");
-  if (sensor_Aout > 700)
-  { /*if condition with threshold 1800*/
-    Serial.println("Gas");
-    digitalWrite(LED, HIGH); /*LED set HIGH if Gas detected */
-  }
-  else
+  if (checkgas == 1)
   {
-    Serial.println("No Gas");
-    digitalWrite(LED, LOW); /*LED set LOW if NO Gas detected */
+    if (sensor_Aout > 700)
+    { /*if condition with threshold 1800*/
+      Serial.println("Gas");
+      digitalWrite(LED, HIGH);
+      digitalWrite(out5, HIGH);  /*LED set HIGH if Gas detected */
+      digitalWrite(out12, HIGH); /*LED set HIGH if Gas detected */
+    }
+    else
+    {
+      Serial.println("No Gas");
+      digitalWrite(LED, LOW);
+      digitalWrite(out5, LOW);  /*LED set HIGH if Gas detected */
+      digitalWrite(out12, LOW); /*LED set LOW if NO Gas detected */
+    }
   }
   delay(1000); /*DELAY of 1 sec*/
 
@@ -376,22 +441,23 @@ void loop()
 
   float temperature = dht.readTemperature();
   ; // read temperature in Celsius
-
+  Serial.println(checktemp);
   if (isnan(temperature))
   {
     Serial.println("Failed to read from DHT sensor!");
   }
-  else
+  else if (checktemp == 1)
   {
     if (temperature > TEMP_UPPER_THRESHOLD)
     {
       Serial.println("Turn the fan on");
-      digitalWrite(RELAY_FAN_PIN, HIGH); // turn on
+      digitalWrite(RELAY_FAN_PIN, HIGH); // turn on AC
+      digitalWrite(out4, HIGH);
     }
-    else if (temperature < TEMP_LOWER_THRESHOLD)
+    else if (temperature > TEMP_LOWER_THRESHOLD)
     {
       Serial.println("Turn the fan off");
-      digitalWrite(RELAY_FAN_PIN, LOW); // turn off
+      digitalWrite(out4, HIGH); // turn on Fan
     }
   }
 
@@ -399,26 +465,30 @@ void loop()
   delay(2000);
 
   val = digitalRead(inputPin); // read input value
-  if (val == HIGH)
-  {                             // check if the input is HIGH
-    digitalWrite(ledPin, HIGH); // turn LED ON
-    if (pirState == LOW)
-    {
-      // we have just turned on
-      Serial.println("Motion detected!");
-      // We only want to print on the output change, not state
-      pirState = HIGH;
-    }
-  }
-  else
+  if (checklight == 1)
   {
-    digitalWrite(ledPin, LOW); // turn LED OFF
-    if (pirState == HIGH)
+    if (val == HIGH)
     {
-      // we have just turned of
-      Serial.println("Motion ended!");
-      // We only want to print on the output change, not state
-      pirState = LOW;
+      // check if the input is HIGH
+      digitalWrite(ledPin, HIGH); // turn LED ON
+      if (pirState == LOW)
+      {
+        // we have just turned on
+        Serial.println("Motion detected!");
+        // We only want to print on the output change, not state
+        pirState = HIGH;
+      }
+    }
+    else
+    {
+      digitalWrite(ledPin, LOW); // turn LED OFF
+      if (pirState == HIGH)
+      {
+        // we have just turned of
+        Serial.println("Motion ended!");
+        // We only want to print on the output change, not state
+        pirState = LOW;
+      }
     }
   }
 
